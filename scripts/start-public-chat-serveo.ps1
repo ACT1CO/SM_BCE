@@ -15,7 +15,7 @@ Get-CimInstance Win32_Process |
     Where-Object { $_.Name -ieq "ssh.exe" -and $_.CommandLine -like "*serveo.net*" } |
     ForEach-Object { Stop-Process -Id $_.ProcessId -Force }
 
-Write-Host "Запускаю Соцсети-ВСЁ! через Docker и PostgreSQL..."
+Write-Host "Starting SM_BCE with Docker and PostgreSQL..."
 $env:HOST_PORT = $hostPort
 Start-Process -FilePath "docker" `
     -ArgumentList "compose up -d --build" `
@@ -27,13 +27,13 @@ Start-Process -FilePath "docker" `
 
 Start-Sleep -Seconds 3
 
-Write-Host "Проверяю http://localhost:$hostPort..."
+Write-Host "Checking http://localhost:$hostPort..."
 $status = (Invoke-WebRequest -Uri "http://localhost:$hostPort" -UseBasicParsing).StatusCode
 if ($status -ne 200) {
-    throw "Локальный сервер ответил не 200, а $status"
+    throw "Local server returned $status instead of 200"
 }
 
-Write-Host "Запускаю публичный SSH tunnel через Serveo..."
+Write-Host "Starting public SSH tunnel through Serveo..."
 Start-Process -FilePath "ssh" `
     -ArgumentList "-o StrictHostKeyChecking=no -o ServerAliveInterval=60 -R 80:localhost:$hostPort serveo.net" `
     -WorkingDirectory $projectRoot `
@@ -41,22 +41,24 @@ Start-Process -FilePath "ssh" `
     -RedirectStandardError $tunnelErr `
     -WindowStyle Hidden
 
-Write-Host "Жду публичную ссылку..."
+Write-Host "Waiting for public URL..."
 for ($i = 0; $i -lt 60; $i++) {
     Start-Sleep -Seconds 1
     if (Test-Path $tunnelOut) {
-        $log = Get-Content $tunnelOut -Raw
-        $match = [regex]::Match($log, "https://[a-z0-9-]+\.serveousercontent\.com")
-        if ($match.Success) {
-            Write-Host ""
-            Write-Host "Публичный адрес чата:"
-            Write-Host $match.Value
-            Write-Host ""
-            exit 0
+        $log = Get-Content $tunnelOut -Raw -ErrorAction SilentlyContinue
+        if (-not [string]::IsNullOrWhiteSpace($log)) {
+            $match = [regex]::Match($log, "https://[a-z0-9-]+\.serveousercontent\.com")
+            if ($match.Success) {
+                Write-Host ""
+                Write-Host "Public chat URL:"
+                Write-Host $match.Value
+                Write-Host ""
+                exit 0
+            }
         }
     }
 }
 
-Write-Host "Не удалось получить ссылку. Логи:"
+Write-Host "Could not read public URL yet. Logs:"
 Write-Host $tunnelOut
 Write-Host $tunnelErr

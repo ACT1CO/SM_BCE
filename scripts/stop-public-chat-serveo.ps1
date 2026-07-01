@@ -8,4 +8,4 @@ Get-CimInstance Win32_Process |
 
 docker compose --project-directory $projectRoot down
 
-Write-Host "Docker-чат и Serveo tunnel остановлены."
+Write-Host "Docker chat and Serveo tunnel stopped."
