@@ -85,13 +85,22 @@ docker compose down -v
 .\scripts\start-public-chat-serveo.ps1
 ```
 
-Скрипт запускает локальный Go-сервер на `localhost:8080`, поднимает SSH tunnel через Serveo и выводит публичную HTTPS-ссылку вида:
+Скрипт запускает Docker Compose с PostgreSQL, проверяет локальный адрес и поднимает SSH tunnel через Serveo. По умолчанию наружу пробрасывается `localhost:8081`, чтобы не конфликтовать с занятым `8080`.
+
+Если нужен другой локальный порт:
+
+```powershell
+$env:HOST_PORT=8082
+.\scripts\start-public-chat-serveo.ps1
+```
+
+Скрипт выводит публичную HTTPS-ссылку вида:
 
 ```text
 https://...serveousercontent.com
 ```
 
-Чтобы остановить локальный сервер и Serveo tunnel:
+Чтобы остановить Docker-контейнеры и Serveo tunnel:
 
 ```powershell
 .\scripts\stop-public-chat-serveo.ps1
