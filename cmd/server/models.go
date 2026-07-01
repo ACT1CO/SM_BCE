@@ -15,12 +15,14 @@ type WSConn interface {
 }
 
 type User struct {
-	ID   string `json:"id"`
-	Name string `json:"name"`
-	Tag  string `json:"tag"`
+	ID     string `json:"id"`
+	Name   string `json:"name"`
+	Tag    string `json:"tag"`
+	Online bool   `json:"online,omitempty"`
 }
 
 type Message struct {
+	ID       string    `json:"id,omitempty"`
 	Type     string    `json:"type"`
 	ClientID string    `json:"clientId,omitempty"`
 	User     User      `json:"user,omitempty"`

@@ -1,0 +1,6 @@
+DOMAIN-SUFFIX,argotunnel.com,DIRECT
+DOMAIN-SUFFIX,trycloudflare.com,DIRECT
+DOMAIN,api.trycloudflare.com,DIRECT
+DOMAIN,region1.v2.argotunnel.com,DIRECT
+DOMAIN,region2.v2.argotunnel.com,DIRECT
+DOMAIN,_v2-origintunneld._tcp.argotunnel.com,DIRECT

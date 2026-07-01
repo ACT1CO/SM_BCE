@@ -1,0 +1,6 @@
+argotunnel.com
+trycloudflare.com
+api.trycloudflare.com
+region1.v2.argotunnel.com
+region2.v2.argotunnel.com
+_v2-origintunneld._tcp.argotunnel.com

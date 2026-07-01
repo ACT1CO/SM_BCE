@@ -1,10 +1,16 @@
 <!doctype html>
 <html lang="ru">
-<head><meta charset="UTF-8" /><meta name="viewport" content="width=device-width, initial-scale=1.0" /><title>Соцсети-ВСЁ!</title><link rel="stylesheet" href="/style.css" /></head>
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Соцсети-ВСЁ!</title>
+  <link rel="stylesheet" href="/style.css" />
+</head>
 <body>
   <main class="app">
     <section id="login" class="card">
-      <h1>Соцсети-ВСЁ!</h1><p>Введи имя и придумай уникальный тег.</p>
+      <h1>Соцсети-ВСЁ!</h1>
+      <p>Введи имя и придумай уникальный тег.</p>
       <form id="loginForm" class="login-form">
         <input id="nameInput" maxlength="30" placeholder="Твоё имя" autocomplete="nickname" required />
         <input id="tagInput" maxlength="24" placeholder="Твой тег, например pavel" autocomplete="username" pattern="[A-Za-z0-9_.-]{3,24}" title="Только латинские буквы, цифры, точка, дефис или подчёркивание; минимум 3 символа" required />
@@ -13,15 +19,69 @@
       </form>
       <p id="loginError" class="error-text hidden"></p>
     </section>
+
     <section id="chat" class="card hidden">
-      <header class="chat-header"><div><h1 id="chatTitle">Общий чат</h1><span id="status">Подключение...</span></div><div class="header-actions"><button id="publicBtn" class="icon-text-btn secondary" type="button">Общий чат<span id="publicPulse" class="pulse-dot hidden"></span></button><button id="privateBtn" class="icon-text-btn secondary" type="button">Личные<span id="privatePulse" class="pulse-dot hidden"></span></button><button id="settingsBtn" class="icon-btn secondary" type="button" title="Настройки">⚙</button></div></header>
-      <div id="settingsMenu" class="settings-menu hidden"><button id="onlineBtn" class="secondary" type="button">Кто онлайн</button><button id="leaveBtn" class="secondary" type="button">Выйти</button></div>
-      <div id="privateTarget" class="private-target hidden"><span id="privateTargetText"></span><button id="clearPrivateBtn" type="button" class="secondary">Общий чат</button></div>
+      <header class="chat-header">
+        <div>
+          <h1 id="chatTitle">Общий чат</h1>
+          <span id="status">Подключение...</span>
+        </div>
+        <div class="header-actions">
+          <button id="publicBtn" class="icon-text-btn secondary active" type="button">Общий чат<span id="publicPulse" class="pulse-dot hidden"></span></button>
+          <button id="privateBtn" class="icon-text-btn secondary" type="button">Участники<span id="privatePulse" class="pulse-dot hidden"></span></button>
+          <button id="settingsBtn" class="icon-btn secondary" type="button" title="Настройки">⚙</button>
+        </div>
+      </header>
+
       <div id="messages" class="messages"></div>
-      <form id="messageForm" class="message-form"><div class="input-wrap"><input id="messageInput" maxlength="500" placeholder="Напиши сообщение..." autocomplete="off" required /><div id="mentionSuggestions" class="mention-suggestions hidden"></div></div><button type="submit">Отправить</button></form>
+
+      <form id="messageForm" class="message-form">
+        <div class="input-wrap">
+          <input id="messageInput" maxlength="500" placeholder="Напиши сообщение..." autocomplete="off" required />
+          <div id="mentionSuggestions" class="mention-suggestions hidden"></div>
+        </div>
+        <button type="submit">Отправить</button>
+      </form>
     </section>
   </main>
+
   <div id="drawerBackdrop" class="drawer-backdrop hidden"></div>
-  <aside id="peopleDrawer" class="users-drawer" aria-hidden="true"><header class="drawer-header"><div><h2 id="drawerTitle">Личные сообщения</h2><span id="onlineCount">0 человек онлайн</span></div><button id="closeDrawerBtn" class="secondary" type="button">Закрыть</button></header><section class="drawer-section"><h2>Диалоги</h2><div id="dialogsList" class="users-list"></div></section><section class="drawer-section"><h2>Онлайн</h2><div id="usersList" class="users-list"></div></section></aside>
+
+  <aside id="peopleDrawer" class="users-drawer" aria-hidden="true">
+    <header class="drawer-header">
+      <div>
+        <h2>Участники</h2>
+        <span id="onlineCount">0 онлайн</span>
+      </div>
+      <button id="closeDrawerBtn" class="secondary" type="button">Закрыть</button>
+    </header>
+    <section class="drawer-section">
+      <h2>Диалоги</h2>
+      <div id="dialogsList" class="users-list"></div>
+    </section>
+    <section class="drawer-section">
+      <h2>Онлайн</h2>
+      <div id="usersList" class="users-list"></div>
+    </section>
+    <section class="drawer-section offline-section">
+      <h2>Оффлайн</h2>
+      <div id="offlineUsersList" class="users-list"></div>
+    </section>
+  </aside>
+
+  <aside id="settingsMenu" class="settings-panel hidden" aria-hidden="true">
+    <header class="drawer-header">
+      <div>
+        <h2>Настройки</h2>
+        <span>Соцсети-ВСЁ!</span>
+      </div>
+      <button id="closeSettingsBtn" class="secondary" type="button">Закрыть</button>
+    </header>
+    <div class="settings-actions">
+      <button id="leaveBtn" class="secondary" type="button">Выйти</button>
+    </div>
+  </aside>
+
   <script type="module" src="/js/app.js"></script>
-</body></html>
+</body>
+</html>

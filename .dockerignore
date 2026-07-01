@@ -1,3 +1,5 @@
+.git
+.local-logs
 chat-history.json
 chat-key.json
 users.json
@@ -6,7 +8,7 @@ cmd/server/chat-key.json
 cmd/server/users.json
 *.exe
 *.test
-.DS_Store
-.local-logs/
 .env
 .env.*
+deploy
+scripts

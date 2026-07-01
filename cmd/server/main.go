@@ -7,9 +7,11 @@ import (
 )
 
 func main() {
-	hub := NewHub("chat-history.json")
+	db := openDBFromEnv()
+	hub := NewHub("chat-history.json", db)
 	keys := NewKeyManager("chat-key.json")
-	users := NewUserStore("users.json")
+	users := NewUserStore("users.json", db)
+	hub.SetUsers(users)
 	keys.Current()
 
 	fs := http.FileServer(http.Dir(webDir()))
