@@ -45,7 +45,7 @@ docker compose down -v
 ## Запуск без Docker
 
 ```powershell
-go run ./cmd/server
+go run ./server
 ```
 
 Без `DATABASE_URL` сервер использует локальные JSON-файлы. Они не попадают в git.
@@ -75,7 +75,7 @@ HOST_PORT=8081
 ## Структура
 
 ```text
-cmd/server/   сервер
+server/       сервер
 web/          клиентская часть
 scripts/      запуск туннеля
 ```

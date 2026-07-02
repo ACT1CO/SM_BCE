@@ -4,7 +4,7 @@ WORKDIR /app
 COPY go.mod go.sum ./
 RUN go mod download
 COPY . .
-RUN go build -o /sm-bce ./cmd/server
+RUN go build -o /sm-bce ./server
 
 FROM alpine:3.20
 

@@ -1,9 +1,9 @@
 chat-history.json
 chat-key.json
 users.json
-cmd/server/chat-history.json
-cmd/server/chat-key.json
-cmd/server/users.json
+server/chat-history.json
+server/chat-key.json
+server/users.json
 *.exe
 *.test
 .DS_Store
