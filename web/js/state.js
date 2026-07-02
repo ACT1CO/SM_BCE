@@ -77,15 +77,6 @@ export function markDialogRead(dialogId) {
   saveReadState();
 }
 
-export function isMessageUnreadInPublic(msg) {
-  return Boolean(msg.id && state.readState.public && msg.id > state.readState.public && msg.from !== state.user?.id);
-}
-
-export function isMessageUnreadInDialog(dialogId, msg) {
-  const lastRead = state.readState.dialogs[dialogId] || '';
-  return Boolean(msg.id && lastRead && msg.id > lastRead && msg.from !== state.user?.id);
-}
-
 export function lastMessageID(messages) {
   for (let i = messages.length - 1; i >= 0; i -= 1) {
     if (messages[i].id) return messages[i].id;

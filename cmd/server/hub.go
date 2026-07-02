@@ -36,6 +36,7 @@ func (h *Hub) loadHistory() {
 			return
 		}
 	}
+
 	data, err := os.ReadFile(h.historyPath)
 	if err != nil {
 		return
@@ -46,6 +47,7 @@ func (h *Hub) loadHistory() {
 		return
 	}
 	h.history = file.Messages
+
 	if h.db != nil {
 		for _, msg := range h.history {
 			if msg.ID == "" {
@@ -67,6 +69,7 @@ LIMIT 1000`)
 		return
 	}
 	defer rows.Close()
+
 	for rows.Next() {
 		var msg Message
 		var name, from, fromTag, to, toName, toTag, text, sentAt, keyDay sql.NullString
@@ -104,6 +107,7 @@ func (h *Hub) Add(client *Client) {
 	h.mu.Lock()
 	h.clients[client] = true
 	h.mu.Unlock()
+
 	h.Send(client, Message{Type: "hello", ClientID: client.User.ID, User: client.User})
 	h.SendHistory(client)
 	h.Broadcast(Message{Type: "system", Text: client.User.Name + " присоединился к чату", Time: now()})
@@ -121,6 +125,7 @@ func (h *Hub) Remove(client *Client) {
 	if !removed {
 		return
 	}
+
 	h.Broadcast(Message{Type: "system", Text: client.User.Name + " вышел из чата", Time: now()})
 	h.BroadcastUsers()
 }
@@ -129,6 +134,7 @@ func (h *Hub) AddHistory(msg Message) {
 	if msg.ID == "" {
 		msg.ID = newID()
 	}
+
 	h.mu.Lock()
 	h.history = append(h.history, msg)
 	if h.db != nil {
@@ -159,12 +165,14 @@ func (h *Hub) SendHistory(client *Client) {
 		}
 	}
 	h.mu.Unlock()
+
 	h.Send(client, Message{Type: "history", Messages: history})
 }
 
 func (h *Hub) Send(client *Client, msg Message) {
 	client.writeMu.Lock()
 	defer client.writeMu.Unlock()
+
 	data, err := json.Marshal(msg)
 	if err != nil {
 		log.Println("json marshal error:", err)
@@ -202,6 +210,7 @@ func (h *Hub) BroadcastUsers() {
 	for i := range users {
 		users[i].Online = online[users[i].ID]
 	}
+
 	msg := Message{Type: "users", Users: users}
 	for _, client := range clients {
 		h.Send(client, msg)
@@ -211,6 +220,7 @@ func (h *Hub) BroadcastUsers() {
 func (h *Hub) AllClients() []*Client {
 	h.mu.Lock()
 	defer h.mu.Unlock()
+
 	clients := make([]*Client, 0, len(h.clients))
 	for client := range h.clients {
 		clients = append(clients, client)
@@ -221,6 +231,7 @@ func (h *Hub) AllClients() []*Client {
 func (h *Hub) ClientsByID(id string) []*Client {
 	h.mu.Lock()
 	defer h.mu.Unlock()
+
 	clients := make([]*Client, 0)
 	for client := range h.clients {
 		if client.User.ID == id {

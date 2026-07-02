@@ -57,6 +57,7 @@ func (s *UserStore) Register(name, tag string) (User, error) {
 		}
 		return User{}, errors.New("Этот тег уже занят")
 	}
+
 	user := User{ID: newID(), Name: name, Tag: tag}
 	if s.db != nil {
 		if err := s.insertUserLocked(user); err != nil {
@@ -81,6 +82,7 @@ func (s *UserStore) ByID(id string) (User, bool) {
 func (s *UserStore) All() []User {
 	s.mu.Lock()
 	defer s.mu.Unlock()
+
 	users := make([]User, 0, len(s.byID))
 	for _, user := range s.byID {
 		users = append(users, user)
@@ -112,6 +114,7 @@ func (s *UserStore) loadFromDB() {
 		return
 	}
 	defer rows.Close()
+
 	for rows.Next() {
 		var user User
 		if err := rows.Scan(&user.ID, &user.Name, &user.Tag); err == nil {
@@ -126,6 +129,7 @@ func (s *UserStore) saveJSONLocked() {
 	for _, user := range s.byID {
 		users = append(users, user)
 	}
+
 	data, err := json.MarshalIndent(usersFile{Users: users}, "", "  ")
 	if err != nil {
 		return
