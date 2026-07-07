@@ -79,7 +79,7 @@ export function markDialogRead(dialogId) {
 
 export function lastMessageID(messages) {
   for (let i = messages.length - 1; i >= 0; i -= 1) {
-    if (messages[i].id) return messages[i].id;
+    if (messages[i].id && !messages[i].deleted) return messages[i].id;
   }
   return '';
 }

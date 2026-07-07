@@ -20,7 +20,11 @@ func main() {
 	http.HandleFunc("/ws", wsHandler(hub, users))
 	http.Handle("/", fs)
 
-	addr := ":8080"
+	port := os.Getenv("PORT")
+	if port == "" {
+		port = "8080"
+	}
+	addr := ":" + port
 	log.Println("Соцсети-ВСЁ! started on http://localhost" + addr)
 	if err := http.ListenAndServe(addr, nil); err != nil {
 		log.Fatal(err)

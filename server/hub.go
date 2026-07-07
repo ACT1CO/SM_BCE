@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"log"
 	"os"
+	"strings"
 	"sync"
 
 	"github.com/gorilla/websocket"
@@ -60,7 +61,7 @@ func (h *Hub) loadHistory() {
 
 func (h *Hub) loadHistoryFromDB() {
 	rows, err := h.db.Query(`
-SELECT id, type, name, from_id, from_tag, to_id, to_name, to_tag, text, sent_at, key_day, private
+SELECT id, type, name, from_id, from_tag, to_id, to_name, to_tag, text, sent_at, key_day, private, deleted, read_by
 FROM messages
 ORDER BY created_at, sent_at
 LIMIT 1000`)
@@ -72,8 +73,8 @@ LIMIT 1000`)
 
 	for rows.Next() {
 		var msg Message
-		var name, from, fromTag, to, toName, toTag, text, sentAt, keyDay sql.NullString
-		if err := rows.Scan(&msg.ID, &msg.Type, &name, &from, &fromTag, &to, &toName, &toTag, &text, &sentAt, &keyDay, &msg.Private); err != nil {
+		var name, from, fromTag, to, toName, toTag, text, sentAt, keyDay, readBy sql.NullString
+		if err := rows.Scan(&msg.ID, &msg.Type, &name, &from, &fromTag, &to, &toName, &toTag, &text, &sentAt, &keyDay, &msg.Private, &msg.Deleted, &readBy); err != nil {
 			continue
 		}
 		msg.Name = name.String
@@ -85,6 +86,7 @@ LIMIT 1000`)
 		msg.Text = text.String
 		msg.Time = sentAt.String
 		msg.KeyDay = keyDay.String
+		msg.ReadBy = decodeReadBy(readBy.String)
 		h.history = append(h.history, msg)
 	}
 }
@@ -130,7 +132,7 @@ func (h *Hub) Remove(client *Client) {
 	h.BroadcastUsers()
 }
 
-func (h *Hub) AddHistory(msg Message) {
+func (h *Hub) AddHistory(msg Message) Message {
 	if msg.ID == "" {
 		msg.ID = newID()
 	}
@@ -145,14 +147,95 @@ func (h *Hub) AddHistory(msg Message) {
 		h.saveHistoryLocked()
 	}
 	h.mu.Unlock()
+	return msg
 }
 
 func (h *Hub) insertMessage(msg Message) error {
 	_, err := h.db.Exec(`
-INSERT INTO messages (id, type, name, from_id, from_tag, to_id, to_name, to_tag, text, sent_at, key_day, private)
-VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)
+INSERT INTO messages (id, type, name, from_id, from_tag, to_id, to_name, to_tag, text, sent_at, key_day, private, deleted, read_by)
+VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14)
 ON CONFLICT (id) DO NOTHING`,
-		msg.ID, msg.Type, msg.Name, msg.From, msg.FromTag, msg.To, msg.ToName, msg.ToTag, msg.Text, msg.Time, msg.KeyDay, msg.Private)
+		msg.ID, msg.Type, msg.Name, msg.From, msg.FromTag, msg.To, msg.ToName, msg.ToTag, msg.Text, msg.Time, msg.KeyDay, msg.Private, msg.Deleted, encodeReadBy(msg.ReadBy))
+	return err
+}
+
+func (h *Hub) DeleteMessage(id, userID string) (Message, bool) {
+	h.mu.Lock()
+	defer h.mu.Unlock()
+
+	for i := range h.history {
+		msg := &h.history[i]
+		if msg.ID != id || msg.Type != "message" || msg.From != userID || msg.Deleted {
+			continue
+		}
+		msg.Deleted = true
+		msg.Text = ""
+		msg.KeyDay = ""
+		updated := *msg
+		if h.db != nil {
+			if err := h.updateMessageDeleted(updated.ID); err != nil {
+				log.Println("history db delete mark error:", err)
+			}
+		} else {
+			h.saveHistoryLocked()
+		}
+		return updated, true
+	}
+	return Message{}, false
+}
+
+func (h *Hub) MarkRead(ids []string, userID string) []Message {
+	if len(ids) == 0 {
+		return nil
+	}
+	idSet := make(map[string]bool, len(ids))
+	for _, id := range ids {
+		if id != "" {
+			idSet[id] = true
+		}
+	}
+
+	h.mu.Lock()
+	changed := false
+	updated := make([]Message, 0)
+	for i := range h.history {
+		msg := &h.history[i]
+		if !idSet[msg.ID] || msg.Type != "message" || msg.Deleted || msg.From == userID {
+			continue
+		}
+		if msg.Private && msg.To != userID {
+			continue
+		}
+		if !msg.Private {
+			continue
+		}
+		if hasString(msg.ReadBy, userID) {
+			continue
+		}
+		msg.ReadBy = append(msg.ReadBy, userID)
+		changed = true
+		updated = append(updated, *msg)
+		if h.db != nil {
+			if err := h.updateMessageReadBy(msg.ID, msg.ReadBy); err != nil {
+				log.Println("history db read mark error:", err)
+			}
+		}
+	}
+	if changed && h.db == nil {
+		h.saveHistoryLocked()
+	}
+	h.mu.Unlock()
+
+	return updated
+}
+
+func (h *Hub) updateMessageDeleted(id string) error {
+	_, err := h.db.Exec(`UPDATE messages SET deleted = true, text = '', key_day = '' WHERE id = $1`, id)
+	return err
+}
+
+func (h *Hub) updateMessageReadBy(id string, readBy []string) error {
+	_, err := h.db.Exec(`UPDATE messages SET read_by = $2 WHERE id = $1`, id, encodeReadBy(readBy))
 	return err
 }
 
@@ -190,6 +273,22 @@ func (h *Hub) Send(client *Client, msg Message) {
 func (h *Hub) Broadcast(msg Message) {
 	for _, client := range h.AllClients() {
 		h.Send(client, msg)
+	}
+}
+
+func (h *Hub) SendMessageEvent(msg Message) {
+	if !msg.Private {
+		h.Broadcast(msg)
+		return
+	}
+	recipients := append(h.ClientsByID(msg.To), h.ClientsByID(msg.From)...)
+	sent := make(map[*Client]bool)
+	for _, recipient := range recipients {
+		if sent[recipient] {
+			continue
+		}
+		sent[recipient] = true
+		h.Send(recipient, msg)
 	}
 }
 
@@ -239,4 +338,35 @@ func (h *Hub) ClientsByID(id string) []*Client {
 		}
 	}
 	return clients
+}
+
+func hasString(values []string, needle string) bool {
+	for _, value := range values {
+		if value == needle {
+			return true
+		}
+	}
+	return false
+}
+
+func encodeReadBy(values []string) string {
+	if len(values) == 0 {
+		return ""
+	}
+	return strings.Join(values, ",")
+}
+
+func decodeReadBy(value string) []string {
+	if strings.TrimSpace(value) == "" {
+		return nil
+	}
+	parts := strings.Split(value, ",")
+	out := make([]string, 0, len(parts))
+	for _, part := range parts {
+		part = strings.TrimSpace(part)
+		if part != "" {
+			out = append(out, part)
+		}
+	}
+	return out
 }

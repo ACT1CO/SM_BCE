@@ -1,7 +1,7 @@
 import { loadServerKeys, registerUser } from './api.js';
 import { decryptMessage, encryptText, resetCrypto, setServerKeys } from './crypto.js';
 import { state, getDialog, loadReadState, loadRememberedUser, markDialogRead, markPublicRead, resetChatState, saveReadState, saveRememberedUser } from './state.js';
-import { clearLoginError, closeDrawer, closeSettings, el, hideMentionSuggestions, openDrawer, renderCurrentChat, renderMentionSuggestions, renderPeople, showChat, showLogin, showLoginError, showPublicChat, toggleSettings, updatePulse } from './ui.js';
+import { clearLoginError, closeDrawer, closeSettings, el, hideMentionSuggestions, openDrawer, renderCurrentChat, renderMentionSuggestions, renderPeople, setMessageActions, showChat, showLogin, showLoginError, showPublicChat, toggleSettings, updatePulse } from './ui.js';
 
 export function initChat() {
   const remembered = loadRememberedUser();
@@ -11,6 +11,7 @@ export function initChat() {
     el.tagInput.value = remembered.tag;
     el.rememberInput.checked = true;
   }
+  setMessageActions({ onDelete: sendDeleteMessage, onReadDialog: reportDialogRead });
   el.loginForm.addEventListener('submit', handleLogin);
   el.messageForm.addEventListener('submit', handleSend);
   el.leaveBtn.addEventListener('click', leaveChat);
@@ -48,7 +49,7 @@ async function handleLogin(event) {
 async function handleSend(event) {
   event.preventDefault();
   const text = el.messageInput.value.trim();
-  if (!text || !state.socket || state.socket.readyState !== WebSocket.OPEN) return;
+  if (!text || !isSocketOpen()) return;
   const encrypted = await encryptText(text);
   const outgoing = { scope: state.activeDialogId ? 'private' : 'public', to: state.activeDialogId || '', text: encrypted.text, keyDay: encrypted.keyDay };
   state.socket.send(JSON.stringify(outgoing));
@@ -85,8 +86,16 @@ async function handleSocketMessage(event) {
     await loadHistory(msg.messages || []);
     return;
   }
-  if (msg.type === 'message') msg.text = await decryptMessage(msg);
-  storeMessage(msg, false);
+  if (msg.type === 'delete') {
+    applyDeletedMessage(msg);
+    return;
+  }
+  if (msg.type === 'read') {
+    applyReadReceipt(msg);
+    return;
+  }
+  if (msg.type === 'message' && !msg.deleted) msg.text = await decryptMessage(msg);
+  storeMessage(normalizeMessage(msg), false);
 }
 
 async function loadHistory(messages) {
@@ -94,14 +103,16 @@ async function loadHistory(messages) {
   state.dialogs = new Map();
   state.mentionAlert = false;
   state.publicUnreadCount = 0;
-  for (const msg of messages) {
-    if (msg.type === 'message') msg.text = await decryptMessage(msg);
+  for (const original of messages) {
+    const msg = normalizeMessage(original);
+    if (msg.type === 'message' && !msg.deleted) msg.text = await decryptMessage(msg);
     storeMessage(msg, true);
   }
   recalculateUnreadFromHistory();
   renderCurrentChat();
   renderPeople();
   updatePulse();
+  if (state.activeDialogId) reportDialogRead(state.activeDialogId);
 }
 
 function storeMessage(msg, fromHistory) {
@@ -109,7 +120,7 @@ function storeMessage(msg, fromHistory) {
     state.publicMessages.push(msg);
     if (!fromHistory && state.activeDialogId) {
       maybeMention(msg);
-      if (msg.from !== state.user.id) {
+      if (msg.from !== state.user.id && !msg.deleted) {
         msg.unread = true;
         state.publicUnreadCount += 1;
       }
@@ -130,8 +141,9 @@ function storeMessage(msg, fromHistory) {
 
   if (state.activeDialogId === dialogId) {
     markDialogRead(dialogId);
+    reportDialogRead(dialogId);
     renderCurrentChat();
-  } else if (!fromHistory && msg.from !== state.user.id) {
+  } else if (!fromHistory && msg.from !== state.user.id && !msg.deleted) {
     msg.unread = true;
     dialog.unreadCount += 1;
   }
@@ -139,13 +151,67 @@ function storeMessage(msg, fromHistory) {
   updatePulse();
 }
 
+function sendDeleteMessage(id) {
+  if (!id || !isSocketOpen()) return;
+  state.socket.send(JSON.stringify({ scope: 'delete', id }));
+}
+
+function reportDialogRead(dialogId) {
+  if (!isSocketOpen() || !state.user) return;
+  const dialog = state.dialogs.get(dialogId);
+  if (!dialog) return;
+  const readIds = dialog.messages
+    .filter((msg) => msg.id && msg.private && msg.to === state.user.id && !msg.deleted && !(msg.readBy || []).includes(state.user.id))
+    .map((msg) => msg.id);
+  if (readIds.length > 0) state.socket.send(JSON.stringify({ scope: 'read', readIds }));
+}
+
+function applyDeletedMessage(update) {
+  let changed = false;
+  forEachStoredMessage(update.id, (msg) => {
+    msg.deleted = true;
+    msg.text = 'Сообщение удалено';
+    msg.keyDay = '';
+    msg.unread = false;
+    changed = true;
+  });
+  if (!changed) return;
+  recalculateUnreadFromHistory();
+  renderCurrentChat();
+  renderPeople();
+  updatePulse();
+}
+
+function applyReadReceipt(update) {
+  let changed = false;
+  forEachStoredMessage(update.id, (msg) => {
+    msg.readBy = update.readBy || [];
+    changed = true;
+  });
+  if (!changed) return;
+  renderCurrentChat();
+}
+
+function forEachStoredMessage(id, callback) {
+  if (!id) return;
+  state.publicMessages.forEach((msg) => {
+    if (msg.id === id) callback(msg);
+  });
+  state.dialogs.forEach((dialog) => {
+    dialog.messages.forEach((msg) => {
+      if (msg.id === id) callback(msg);
+    });
+  });
+}
+
 function recalculateUnreadFromHistory() {
   const lastPublic = state.readState.public || '';
-  let afterPublicRead = false;
+  let afterPublicRead = !lastPublic;
   state.publicUnreadCount = 0;
+  state.mentionAlert = false;
   for (const msg of state.publicMessages) {
     if (msg.id === lastPublic) afterPublicRead = true;
-    msg.unread = Boolean(lastPublic && afterPublicRead && msg.id && msg.id !== lastPublic && msg.from !== state.user.id && msg.type !== 'system');
+    msg.unread = Boolean(afterPublicRead && msg.id && msg.id !== lastPublic && msg.from !== state.user.id && msg.type !== 'system' && !msg.deleted);
     if (msg.unread) {
       state.publicUnreadCount += 1;
       maybeMention(msg);
@@ -154,11 +220,11 @@ function recalculateUnreadFromHistory() {
 
   for (const dialog of state.dialogs.values()) {
     const lastRead = state.readState.dialogs[dialog.id] || '';
-    let afterDialogRead = false;
+    let afterDialogRead = !lastRead;
     dialog.unreadCount = 0;
     for (const msg of dialog.messages) {
       if (msg.id === lastRead) afterDialogRead = true;
-      msg.unread = Boolean(lastRead && afterDialogRead && msg.id && msg.id !== lastRead && msg.from !== state.user.id);
+      msg.unread = Boolean(afterDialogRead && msg.id && msg.id !== lastRead && msg.from !== state.user.id && !msg.deleted);
       if (msg.unread) dialog.unreadCount += 1;
     }
   }
@@ -180,7 +246,7 @@ function syncDialogsWithUsers() {
 }
 
 function maybeMention(msg) {
-  if (!msg.text || msg.from === state.user.id || !state.user || !state.user.tag) return;
+  if (!msg.text || msg.deleted || msg.from === state.user.id || !state.user || !state.user.tag) return;
   const lowerText = msg.text.toLowerCase();
   const needle = '@' + state.user.tag.toLowerCase();
   if (lowerText.split(/\s+/).some((part) => part.replace(/[.,!?;:]$/, '') === needle)) state.mentionAlert = true;
@@ -194,6 +260,14 @@ function leaveChat() {
   closeDrawer();
   closeSettings();
   showLogin();
+}
+
+function normalizeMessage(msg) {
+  return { ...msg, readBy: Array.isArray(msg.readBy) ? msg.readBy : [] };
+}
+
+function isSocketOpen() {
+  return state.socket && state.socket.readyState === WebSocket.OPEN;
 }
 
 function loginErrorText(error) {

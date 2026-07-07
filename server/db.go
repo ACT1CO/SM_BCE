@@ -60,6 +60,9 @@ CREATE TABLE IF NOT EXISTS messages (
 CREATE INDEX IF NOT EXISTS messages_created_at_idx ON messages (created_at);
 CREATE INDEX IF NOT EXISTS messages_private_to_idx ON messages (private, to_id);
 CREATE INDEX IF NOT EXISTS messages_private_from_idx ON messages (private, from_id);
+
+ALTER TABLE messages ADD COLUMN IF NOT EXISTS deleted BOOLEAN NOT NULL DEFAULT false;
+ALTER TABLE messages ADD COLUMN IF NOT EXISTS read_by TEXT NOT NULL DEFAULT '';
 `)
 	return err
 }

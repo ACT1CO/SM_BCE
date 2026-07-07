@@ -38,13 +38,17 @@ type Message struct {
 	Time     string    `json:"time,omitempty"`
 	KeyDay   string    `json:"keyDay,omitempty"`
 	Private  bool      `json:"private,omitempty"`
+	Deleted  bool      `json:"deleted,omitempty"`
+	ReadBy   []string  `json:"readBy,omitempty"`
 }
 
 type IncomingMessage struct {
-	Scope  string `json:"scope"`
-	To     string `json:"to"`
-	Text   string `json:"text"`
-	KeyDay string `json:"keyDay"`
+	Scope   string   `json:"scope"`
+	ID      string   `json:"id"`
+	To      string   `json:"to"`
+	Text    string   `json:"text"`
+	KeyDay  string   `json:"keyDay"`
+	ReadIDs []string `json:"readIds"`
 }
 
 type RegisterRequest struct {

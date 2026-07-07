@@ -1,5 +1,11 @@
 import { state, getDialog, markDialogRead, markPublicRead } from './state.js';
 
+let messageActions = {};
+
+export function setMessageActions(actions) {
+  messageActions = actions || {};
+}
+
 export const el = {
   login: document.getElementById('login'),
   chat: document.getElementById('chat'),
@@ -95,6 +101,7 @@ export function openDialog(user) {
   const dialog = getDialog(user.id, user);
   state.activeDialogId = dialog.id;
   markDialogRead(dialog.id);
+  if (messageActions.onReadDialog) messageActions.onReadDialog(dialog.id);
   el.chatTitle.textContent = `${dialog.name} @${dialog.tag}`;
   el.publicBtn.classList.remove('active');
   el.privateBtn.classList.add('active');
@@ -195,8 +202,8 @@ export function hideMentionSuggestions() {
 export function updatePulse() {
   const hasPrivateUnread = Array.from(state.dialogs.values()).some((dialog) => dialog.unreadCount > 0);
   el.privatePulse.classList.toggle('hidden', !hasPrivateUnread);
-  el.publicPulse.classList.toggle('hidden', !state.mentionAlert && state.publicUnreadCount === 0);
-  document.title = hasPrivateUnread || state.mentionAlert || state.publicUnreadCount > 0 ? '• Соцсети-ВСЁ!' : 'Соцсети-ВСЁ!';
+  el.publicPulse.classList.toggle('hidden', !state.mentionAlert);
+  document.title = hasPrivateUnread || state.mentionAlert ? '• Соцсети-ВСЁ!' : 'Соцсети-ВСЁ!';
 }
 
 function createUserRow(user, isSelf, fromParticipants) {
@@ -244,17 +251,49 @@ function renderMessageElement(msg) {
     el.messages.appendChild(item);
     return;
   }
+
+  const isOwn = msg.from === (state.user && state.user.id);
   item.className = msg.private ? 'message private-message' : 'message';
+  if (isOwn) item.classList.add('own-message');
+  if (msg.deleted) item.classList.add('deleted-message');
   if (msg.unread) item.classList.add('unread-message');
+
   const meta = document.createElement('div');
   meta.className = 'meta';
   meta.textContent = msg.private
-    ? (msg.from === (state.user && state.user.id) ? `Вы · ${msg.time}` : `${msg.name} @${msg.fromTag} · ${msg.time}`)
+    ? (isOwn ? `Вы · ${msg.time}` : `${msg.name} @${msg.fromTag} · ${msg.time}`)
     : `${msg.name} @${msg.fromTag || ''} · ${msg.time}`;
+
   const text = document.createElement('div');
   text.className = 'text';
-  text.textContent = msg.text;
+  text.textContent = msg.deleted ? 'Сообщение удалено' : msg.text;
+
+  const footer = document.createElement('div');
+  footer.className = 'message-footer';
+  if (isOwn && msg.type === 'message') {
+    const status = document.createElement('span');
+    status.className = 'message-status';
+    status.textContent = messageReadStatus(msg);
+    footer.appendChild(status);
+  }
+  if (isOwn && msg.type === 'message' && !msg.deleted && messageActions.onDelete) {
+    const remove = document.createElement('button');
+    remove.type = 'button';
+    remove.className = 'message-delete';
+    remove.title = 'Удалить сообщение';
+    remove.textContent = 'Удалить';
+    remove.addEventListener('click', () => messageActions.onDelete(msg.id));
+    footer.appendChild(remove);
+  }
+
   item.appendChild(meta);
   item.appendChild(text);
+  if (footer.childNodes.length > 0) item.appendChild(footer);
   el.messages.appendChild(item);
+}
+
+function messageReadStatus(msg) {
+  if (msg.deleted) return '';
+  if (!msg.private) return '✓';
+  return Array.isArray(msg.readBy) && msg.readBy.includes(msg.to) ? '✓✓' : '✓';
 }

@@ -74,8 +74,26 @@ func handleIncoming(hub *Hub, users *UserStore, client *Client, raw []byte) {
 		text = text[:4096]
 	}
 	incoming := IncomingMessage{Scope: "public", Text: text}
-	if err := json.Unmarshal([]byte(text), &incoming); err != nil || strings.TrimSpace(incoming.Text) == "" {
+	if err := json.Unmarshal([]byte(text), &incoming); err != nil {
 		incoming = IncomingMessage{Scope: "public", Text: text}
+	}
+	if incoming.Scope != "delete" && incoming.Scope != "read" && strings.TrimSpace(incoming.Text) == "" {
+		return
+	}
+	if incoming.Scope == "delete" && incoming.ID != "" {
+		msg, ok := hub.DeleteMessage(incoming.ID, client.User.ID)
+		if ok {
+			msg.Type = "delete"
+			hub.SendMessageEvent(msg)
+		}
+		return
+	}
+	if incoming.Scope == "read" {
+		for _, msg := range hub.MarkRead(incoming.ReadIDs, client.User.ID) {
+			msg.Type = "read"
+			hub.SendMessageEvent(msg)
+		}
+		return
 	}
 	if incoming.Scope == "private" && incoming.To != "" {
 		msg := Message{Type: "message", Name: client.User.Name, From: client.User.ID, FromTag: client.User.Tag, To: incoming.To, Text: incoming.Text, Time: now(), KeyDay: incoming.KeyDay, Private: true}
@@ -83,20 +101,12 @@ func handleIncoming(hub *Hub, users *UserStore, client *Client, raw []byte) {
 			msg.ToName = target.Name
 			msg.ToTag = target.Tag
 		}
-		hub.AddHistory(msg)
-		recipients := append(hub.ClientsByID(incoming.To), hub.ClientsByID(client.User.ID)...)
-		sent := make(map[*Client]bool)
-		for _, recipient := range recipients {
-			if sent[recipient] {
-				continue
-			}
-			sent[recipient] = true
-			hub.Send(recipient, msg)
-		}
+		msg = hub.AddHistory(msg)
+		hub.SendMessageEvent(msg)
 		return
 	}
 	msg := Message{Type: "message", Name: client.User.Name, From: client.User.ID, FromTag: client.User.Tag, Text: incoming.Text, Time: now(), KeyDay: incoming.KeyDay}
-	hub.AddHistory(msg)
+	msg = hub.AddHistory(msg)
 	hub.Broadcast(msg)
 }
 
